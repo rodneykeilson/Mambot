@@ -1,8 +1,10 @@
 import { Client, GatewayIntentBits, Collection, Events } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
+import { getVoiceConnection } from '@discordjs/voice';
 import config from './config.js';
-import { playRandomSound, scheduleNextSound } from './utils/audioPlayer.js';
+import { scheduleNextSound } from './utils/audioPlayer.js';
 import mambotCommand from './commands/mambot.js';
+import joinCommand from './commands/join.js';
+import leaveCommand from './commands/leave.js';
 
 // Create Discord client with necessary intents
 const client = new Client({
@@ -15,36 +17,18 @@ const client = new Client({
 
 // Store commands
 client.commands = new Collection();
+client.commands.set(joinCommand.data.name, joinCommand);
+client.commands.set(leaveCommand.data.name, leaveCommand);
 client.commands.set(mambotCommand.data.name, mambotCommand);
+
+// Store active voice connections
+client.activeVoiceConnections = new Map();
 
 // Bot ready event
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
-  
-  try {
-    // Join the voice channel
-    const guild = await client.guilds.fetch(config.guildId);
-    const voiceChannel = await guild.channels.fetch(config.voiceChannelId);
-    
-    if (!voiceChannel) {
-      console.error('❌ Voice channel not found!');
-      return;
-    }
-    
-    const connection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: guild.id,
-      adapterCreator: guild.voiceAdapterCreator,
-    });
-    
-    console.log(`🔊 Joined voice channel: ${voiceChannel.name}`);
-    
-    // Start the random sound scheduler
-    scheduleNextSound(connection);
-    
-  } catch (error) {
-    console.error('❌ Error joining voice channel:', error);
-  }
+  console.log(`📋 Bot is ready! Use /join in a voice channel to get started.`);
+  console.log(`🎵 Available in ${c.guilds.cache.size} server(s)`);
 });
 
 // Handle slash commands
@@ -73,25 +57,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   // If bot was disconnected from voice channel
   if (oldState.member?.id === client.user.id && !newState.channelId) {
-    console.log('⚠️ Bot was disconnected from voice channel, attempting to rejoin...');
+    const guildId = oldState.guild.id;
+    const connectionInfo = client.activeVoiceConnections.get(guildId);
     
-    setTimeout(async () => {
-      try {
-        const guild = await client.guilds.fetch(config.guildId);
-        const voiceChannel = await guild.channels.fetch(config.voiceChannelId);
-        
-        const connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: guild.id,
-          adapterCreator: guild.voiceAdapterCreator,
-        });
-        
-        console.log(`✅ Rejoined voice channel: ${voiceChannel.name}`);
-        scheduleNextSound(connection);
-      } catch (error) {
-        console.error('❌ Error rejoining voice channel:', error);
-      }
-    }, 5000); // Wait 5 seconds before rejoining
+    if (connectionInfo) {
+      console.log(`⚠️ Bot was disconnected from voice channel in ${oldState.guild.name}, attempting to rejoin...`);
+      
+      setTimeout(async () => {
+        try {
+          const guild = await client.guilds.fetch(guildId);
+          const voiceChannel = await guild.channels.fetch(connectionInfo.channelId);
+          
+          if (voiceChannel) {
+            const { joinVoiceChannel } = await import('@discordjs/voice');
+            const connection = joinVoiceChannel({
+              channelId: voiceChannel.id,
+              guildId: guild.id,
+              adapterCreator: guild.voiceAdapterCreator,
+            });
+            
+            connectionInfo.connection = connection;
+            console.log(`✅ Rejoined voice channel: ${voiceChannel.name}`);
+            scheduleNextSound(connection);
+          }
+        } catch (error) {
+          console.error('❌ Error rejoining voice channel:', error);
+          client.activeVoiceConnections.delete(guildId);
+        }
+      }, 5000); // Wait 5 seconds before rejoining
+    }
   }
 });
 

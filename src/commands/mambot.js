@@ -1,7 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getVoiceConnection } from '@discordjs/voice';
 import { getAudioFileFromCategory, playAudioFile } from '../utils/audioPlayer.js';
-import config from '../config.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -21,12 +20,12 @@ export default {
   async execute(interaction) {
     const soundCategory = interaction.options.getString('sound');
     
-    // Get the voice connection
-    const connection = getVoiceConnection(config.guildId);
+    // Get the voice connection for this guild
+    const connection = getVoiceConnection(interaction.guildId);
     
     if (!connection) {
       await interaction.reply({
-        content: '❌ Bot is not in a voice channel!',
+        content: '❌ I\'m not in a voice channel! Use `/join` first.',
         ephemeral: true,
       });
       return;

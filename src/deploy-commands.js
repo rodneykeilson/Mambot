@@ -1,21 +1,25 @@
 import { REST, Routes } from 'discord.js';
 import config from './config.js';
 import mambotCommand from './commands/mambot.js';
+import joinCommand from './commands/join.js';
+import leaveCommand from './commands/leave.js';
 
 const commands = [
+  joinCommand.data.toJSON(),
+  leaveCommand.data.toJSON(),
   mambotCommand.data.toJSON(),
 ];
 
 const rest = new REST().setToken(config.token);
 
-// Deploy commands
+// Deploy commands globally
 (async () => {
   try {
     console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-    // Register commands globally or for a specific guild
+    // Register commands globally (available in all servers)
     const data = await rest.put(
-      Routes.applicationGuildCommands(config.clientId, config.guildId),
+      Routes.applicationCommands(config.clientId),
       { body: commands },
     );
 
